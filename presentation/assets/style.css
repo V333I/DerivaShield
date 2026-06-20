@@ -144,3 +144,36 @@ body {
 .pulse-alert {
     animation: pulse-red 2s infinite;
 }
+
+/* Estilos para los Tabs (Pestañas) */
+.custom-tabs-container {
+    margin-bottom: 25px;
+    display: flex;
+    justify-content: center;
+}
+
+.custom-tab {
+    background-color: #0d1627 !important;
+    border: 1px solid #1e293b !important;
+    border-bottom: 2px solid #1e293b !important;
+    color: #94a3b8 !important;
+    padding: 12px 24px !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 8px 8px 0 0 !important;
+    margin: 0 5px;
+}
+
+.custom-tab:hover {
+    color: #e2e8f0 !important;
+}
+
+.custom-tab--selected {
+    background-color: #0f172a !important;
+    border-top: 2px solid #00f2fe !important;
+    border-bottom: 2px solid #0f172a !important;
+    color: #00f2fe !important;
+    font-weight: 700 !important;
+}

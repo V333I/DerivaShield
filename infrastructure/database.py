@@ -110,3 +110,46 @@ def clear_alerts():
     cursor.execute('DELETE FROM alerts')
     conn.commit()
     conn.close()
+
+def get_historical_flow(period="daily"):
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    if period == "daily":
+        query = '''
+        SELECT 
+            strftime('%Y-%m-%d %H:00:00', timestamp, 'unixepoch', 'localtime') as period_time,
+            SUM(packets_per_second) as total_packets,
+            SUM(bytes_per_second) / (1024.0 * 1024.0) as total_mb
+        FROM traffic_metrics 
+        WHERE timestamp >= strftime('%s', 'now', '-1 day')
+        GROUP BY period_time
+        ORDER BY period_time ASC
+        '''
+    elif period == "weekly":
+        query = '''
+        SELECT 
+            strftime('%Y-%m-%d', timestamp, 'unixepoch', 'localtime') as period_time,
+            SUM(packets_per_second) as total_packets,
+            SUM(bytes_per_second) / (1024.0 * 1024.0) as total_mb
+        FROM traffic_metrics 
+        WHERE timestamp >= strftime('%s', 'now', '-7 days')
+        GROUP BY period_time
+        ORDER BY period_time ASC
+        '''
+    else: # monthly
+        query = '''
+        SELECT 
+            strftime('%Y-%m-%d', timestamp, 'unixepoch', 'localtime') as period_time,
+            SUM(packets_per_second) as total_packets,
+            SUM(bytes_per_second) / (1024.0 * 1024.0) as total_mb
+        FROM traffic_metrics 
+        WHERE timestamp >= strftime('%s', 'now', '-30 days')
+        GROUP BY period_time
+        ORDER BY period_time ASC
+        '''
+        
+    cursor.execute(query)
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
