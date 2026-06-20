@@ -68,5 +68,14 @@ class AppService:
         # Publicar para que el dashboard se actualice
         bus.publish('alerta_guardada', alert)
         
+        # Enviar notificación asíncrona a Telegram si es de alta severidad
+        if alert.severity.lower() == "alta":
+            from infrastructure.telegram_bot import send_telegram_alert
+            threading.Thread(
+                target=send_telegram_alert,
+                args=(alert.alert_type, alert.description, alert.severity, alert.source),
+                daemon=True
+            ).start()
+        
     def update_settings(self, k, window_size):
         self.detector.update_settings(k, window_size)

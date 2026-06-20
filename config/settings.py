@@ -1,5 +1,12 @@
 import os
+from dotenv import load_dotenv
 
+# Cargar variables de entorno del archivo .env
+load_dotenv()
+
+# Configuraciones de Telegram
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 DB_PATH = os.path.join(DATA_DIR, 'derivashield.db')

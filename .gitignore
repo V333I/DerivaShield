@@ -17,3 +17,7 @@ Thumbs.db
 
 # Ignorar archivos temporal de Dash/Flask
 .pytest_cache/
+
+# Archivos de secretos y variables de entorno
+.env
+.env.*
