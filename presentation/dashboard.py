@@ -1,0 +1,238 @@
+import dash
+from dash import dcc, html, Input, Output, State, dash_table
+import plotly.graph_objs as plotly_go
+import pandas as pd
+from collections import deque
+import threading
+import time
+
+from application.event_bus import bus
+from application.services import AppService
+from infrastructure.database import get_recent_metrics, get_recent_alerts, clear_alerts
+from config import settings
+
+app = dash.Dash(__name__, title="DerivaShield SOC")
+server = app.server
+
+# Variables globales para el dashboard en memoria
+metrics_history = deque(maxlen=settings.DEFAULT_WINDOW_SIZE)
+alerts_history = deque(maxlen=50)
+
+def on_metric_calculated(metric):
+    metrics_history.append(metric)
+
+def on_alert_saved(alert):
+    alerts_history.appendleft(alert)
+
+bus.subscribe('metrica_calculada', on_metric_calculated)
+bus.subscribe('alerta_guardada', on_alert_saved)
+
+app_service = None
+
+# Layout rediseñado con CSS Classes
+app.layout = html.Div(className='dashboard-container', children=[
+    html.H1("DerivaShield SOC", className='title'),
+    
+    html.Div(style={'display': 'flex', 'gap': '20px', 'marginBottom': '20px'}, children=[
+        # Tarjeta de Parámetros
+        html.Div(className='card', style={'flex': '1'}, children=[
+            html.H3("Ajustes de Detección (Filtro Matemático)", className='card-title'),
+            html.Label("Sensibilidad k (Menor = Más estricto):", className='control-label'),
+            dcc.Slider(
+                id='k-slider', min=1.0, max=5.0, step=0.1, value=settings.DEFAULT_K_THRESHOLD,
+                marks={i: {'label': str(i), 'style': {'color': '#94a3b8'}} for i in range(1, 6)},
+                className='custom-slider'
+            ),
+            html.Label("Ventana de tiempo (segundos):", className='control-label', style={'marginTop': '20px'}),
+            dcc.Input(id='window-input', type='number', value=settings.DEFAULT_WINDOW_SIZE, min=10, max=300, className='control-input'),
+            html.Div(style={'marginTop': '20px'}, children=[
+                html.Button('Aplicar Cambios', id='btn-update', n_clicks=0, className='btn btn-primary'),
+                html.Span(id='system-status', style={'marginLeft': '15px', 'color': '#00f2fe', 'fontSize': '0.9rem'})
+            ])
+        ]),
+        
+        # Tarjeta de Estado
+        html.Div(className='card', style={'flex': '1'}, children=[
+            html.H3("Estado Global del Sistema", className='card-title'),
+            html.Div(id='alert-counters', className='counters'),
+            html.Div(style={'marginTop': '20px', 'textAlign': 'right'}, children=[
+                html.Button('Purgar Alertas', id='btn-clear', n_clicks=0, className='btn btn-danger')
+            ])
+        ])
+    ]),
+    
+    # Gráficos Superiores f(t)
+    html.Div(style={'display': 'flex', 'gap': '20px', 'marginBottom': '20px'}, children=[
+        html.Div(className='card', style={'flex': '1'}, children=[
+            dcc.Graph(id='graph-packets', config={'displayModeBar': False})
+        ]),
+        html.Div(className='card', style={'flex': '1'}, children=[
+            dcc.Graph(id='graph-ports', config={'displayModeBar': False})
+        ])
+    ]),
+    
+    # Gráficos Inferiores f'(t)
+    html.Div(style={'display': 'flex', 'gap': '20px', 'marginBottom': '20px'}, children=[
+        html.Div(className='card', style={'flex': '1'}, children=[
+            dcc.Graph(id='graph-deriv-packets', config={'displayModeBar': False})
+        ]),
+        html.Div(className='card', style={'flex': '1'}, children=[
+            dcc.Graph(id='graph-deriv-ports', config={'displayModeBar': False})
+        ])
+    ]),
+    
+    # Tabla de Alertas
+    html.Div(className='card', children=[
+        html.H3("Registro de Eventos Anómalos", className='card-title'),
+        html.Div(id='alerts-table')
+    ]),
+    
+    dcc.Interval(id='interval-component', interval=1000, n_intervals=0)
+])
+
+@app.callback(
+    Output('system-status', 'children'),
+    Input('btn-update', 'n_clicks'),
+    State('k-slider', 'value'),
+    State('window-input', 'value')
+)
+def update_settings(n_clicks, k_val, window_val):
+    if n_clicks > 0 and app_service:
+        app_service.update_settings(k_val, window_val)
+        return f"✔ Actualizado: k={k_val}, Ventana={window_val}s"
+    return "✔ Sistema en línea"
+
+@app.callback(
+    Output('alert-counters', 'children'),
+    Output('alerts-table', 'children'),
+    Input('interval-component', 'n_intervals'),
+    Input('btn-clear', 'n_clicks')
+)
+def update_alerts(n_intervals, clear_clicks):
+    ctx = dash.callback_context
+    if ctx.triggered and 'btn-clear' in ctx.triggered[0]['prop_id']:
+        clear_alerts()
+        alerts_history.clear()
+        
+    alerts_data = get_recent_alerts(50)
+    
+    total = len(alerts_data)
+    ddos = sum(1 for a in alerts_data if a[2] == "Posible DDoS")
+    portscan = sum(1 for a in alerts_data if a[2] == "Posible Port Scanning")
+    
+    counters_html = [
+        html.Div(className='counter-box', children=[
+            html.Div("Alertas Totales", className='counter-label'),
+            html.Div(f"{total}", className='counter-value val-total')
+        ]),
+        html.Div(className='counter-box' + (' pulse-alert' if ddos > 0 else ''), children=[
+            html.Div("Impactos DDoS", className='counter-label'),
+            html.Div(f"{ddos}", className='counter-value val-ddos')
+        ]),
+        html.Div(className='counter-box', children=[
+            html.Div("Escaneos de Puerto", className='counter-label'),
+            html.Div(f"{portscan}", className='counter-value val-port')
+        ])
+    ]
+    
+    if len(alerts_data) == 0:
+        table = html.P("No se registran anomalías recientes.", style={'color': '#94a3b8', 'textAlign': 'center', 'padding': '20px'})
+    else:
+        df_alerts = pd.DataFrame(alerts_data, columns=['ID', 'Timestamp', 'Tipo', 'Severidad', 'Métrica', 'Valor', 'Derivada', 'Umbral', 'Descripción', 'Origen'])
+        df_alerts['Hora'] = pd.to_datetime(df_alerts['Timestamp'], unit='s').dt.strftime('%H:%M:%S')
+        df_alerts = df_alerts[['Hora', 'Tipo', 'Severidad', 'Descripción', 'Origen']]
+        
+        table = dash_table.DataTable(
+            data=df_alerts.to_dict('records'),
+            columns=[{'name': i, 'id': i} for i in df_alerts.columns],
+            style_table={'overflowX': 'auto', 'borderRadius': '8px'},
+            style_cell={
+                'textAlign': 'left', 
+                'padding': '12px',
+                'backgroundColor': '#0f172a',
+                'color': '#e2e8f0',
+                'borderBottom': '1px solid #1e293b',
+                'borderTop': 'none',
+                'borderLeft': 'none',
+                'borderRight': 'none',
+                'fontFamily': 'Inter'
+            },
+            style_header={
+                'backgroundColor': '#1e293b',
+                'color': '#00f2fe',
+                'fontWeight': '600',
+                'borderBottom': '2px solid #00f2fe'
+            },
+            style_data_conditional=[
+                {
+                    'if': {'filter_query': '{Tipo} = "Posible DDoS"'},
+                    'color': '#ff416c',
+                    'fontWeight': '600'
+                },
+                {
+                    'if': {'filter_query': '{Tipo} = "Posible Port Scanning"'},
+                    'color': '#f5af19',
+                    'fontWeight': '600'
+                }
+            ]
+        )
+        
+    return counters_html, table
+
+def get_empty_figure(title):
+    fig = plotly_go.Figure()
+    fig.update_layout(
+        title=title,
+        template='plotly_dark',
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=30, r=30, t=50, b=30),
+        font=dict(color='#94a3b8')
+    )
+    return fig
+
+@app.callback(
+    Output('graph-packets', 'figure'),
+    Output('graph-ports', 'figure'),
+    Output('graph-deriv-packets', 'figure'),
+    Output('graph-deriv-ports', 'figure'),
+    Input('interval-component', 'n_intervals')
+)
+def update_graphs(n_intervals):
+    if len(metrics_history) == 0:
+        return get_empty_figure("f(t): Paquetes/s"), get_empty_figure("f(t): Puertos Únicos/s"), get_empty_figure("f'(t): Derivada Paquetes"), get_empty_figure("f'(t): Derivada Puertos")
+        
+    times = [time.strftime('%H:%M:%S', time.localtime(m.timestamp)) for m in metrics_history]
+    packets = [m.packets_per_second for m in metrics_history]
+    ports = [m.unique_ports_per_second for m in metrics_history]
+    deriv_packets = [m.derivative_packets for m in metrics_history]
+    deriv_ports = [m.derivative_ports for m in metrics_history]
+    
+    # Configuración de layout compartida
+    layout_config = dict(
+        template='plotly_dark',
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=30, r=30, t=50, b=30),
+        font=dict(color='#94a3b8'),
+        xaxis=dict(showgrid=True, gridcolor='#1e293b'),
+        yaxis=dict(showgrid=True, gridcolor='#1e293b')
+    )
+    
+    fig_packets = plotly_go.Figure()
+    fig_packets.add_trace(plotly_go.Scatter(x=times, y=packets, mode='lines', line=dict(color='#00f2fe', width=2), fill='tozeroy', fillcolor='rgba(0, 242, 254, 0.1)'))
+    fig_packets.update_layout(title="f(t): Volumen de Tráfico (Paquetes/s)", **layout_config)
+    
+    fig_ports = plotly_go.Figure()
+    fig_ports.add_trace(plotly_go.Scatter(x=times, y=ports, mode='lines', line=dict(color='#b100ff', width=2), fill='tozeroy', fillcolor='rgba(177, 0, 255, 0.1)'))
+    fig_ports.update_layout(title="f(t): Diversidad (Puertos Únicos/s)", **layout_config)
+    
+    fig_d_packets = plotly_go.Figure()
+    fig_d_packets.add_trace(plotly_go.Scatter(x=times, y=deriv_packets, mode='lines', line=dict(color='#ff416c', width=2)))
+    fig_d_packets.update_layout(title="f'(t): Tasa de Cambio (Aceleración Paquetes/s)", **layout_config)
+    
+    fig_d_ports = plotly_go.Figure()
+    fig_d_ports.add_trace(plotly_go.Scatter(x=times, y=deriv_ports, mode='lines', line=dict(color='#f5af19', width=2)))
+    fig_d_ports.update_layout(title="f'(t): Tasa de Cambio (Aceleración Puertos/s)", **layout_config)
+    
+    return fig_packets, fig_ports, fig_d_packets, fig_d_ports

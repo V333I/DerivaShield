@@ -1,0 +1,146 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+
+body {
+    background-color: #050b14;
+    color: #e2e8f0;
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.dashboard-container {
+    padding: 30px;
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+.title {
+    text-align: center;
+    color: #00f2fe;
+    font-weight: 700;
+    font-size: 2.5rem;
+    margin-bottom: 30px;
+    text-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+    letter-spacing: 1px;
+}
+
+.card {
+    background-color: #0d1627;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    box-shadow: 0 8px 30px rgba(0, 242, 254, 0.1);
+}
+
+.card-title {
+    color: #94a3b8;
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-top: 0;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #1e293b;
+    padding-bottom: 10px;
+}
+
+.control-label {
+    display: block;
+    color: #cbd5e1;
+    margin-bottom: 8px;
+    font-size: 0.95rem;
+}
+
+.control-input {
+    background-color: #0f172a;
+    border: 1px solid #334155;
+    color: #e2e8f0;
+    padding: 10px;
+    border-radius: 6px;
+    width: 100%;
+    box-sizing: border-box;
+    font-family: 'Inter', sans-serif;
+}
+
+.control-input:focus {
+    outline: none;
+    border-color: #00f2fe;
+}
+
+.btn {
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #00c6ff, #0072ff);
+    color: white;
+}
+.btn-primary:hover {
+    box-shadow: 0 0 15px rgba(0, 114, 255, 0.5);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #ff416c, #ff4b2b);
+    color: white;
+}
+.btn-danger:hover {
+    box-shadow: 0 0 15px rgba(255, 75, 43, 0.5);
+}
+
+.counters {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+}
+
+.counter-box {
+    background-color: #0f172a;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    flex: 1;
+    margin: 0 5px;
+    border: 1px solid #1e293b;
+}
+
+.counter-label {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.counter-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-top: 5px;
+}
+
+.val-total { color: #e2e8f0; }
+.val-ddos { color: #ff416c; }
+.val-port { color: #f5af19; }
+
+/* Customizing Dash DataTable */
+.dash-spreadsheet-container .dash-spreadsheet-inner {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Animations */
+@keyframes pulse-red {
+    0% { box-shadow: 0 0 0 0 rgba(255, 65, 108, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(255, 65, 108, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 65, 108, 0); }
+}
+.pulse-alert {
+    animation: pulse-red 2s infinite;
+}

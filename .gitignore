@@ -1,0 +1,19 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Base de datos local
+data/derivashield.db
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Configuración del IDE
+.vscode/
+
+# Ignorar archivos temporal de Dash/Flask
+.pytest_cache/
